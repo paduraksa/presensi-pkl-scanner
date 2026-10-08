@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>Scanner QR - Presensi PKL</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      text-align: center;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 14px;
+    }
+
+    .status {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      background: #f3f4f6;
+      font-size: 14px;
+    }
+
+    .success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      margin-top: 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .btn-start {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-stop {
+      background: #dc2626;
+      color: white;
+    }
+
+    .result {
+      margin-top: 15px;
+      padding: 15px;
+      background: #eff6ff;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .result strong {
+      font-size: 22px;
+      display: block;
+      margin-top: 5px;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 15px;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="card">
+
+    <h1>📷 Scanner QR</h1>
+
+    <div class="subtitle">
+      Presensi PKL<br>
+      Kelurahan Paduraksa
+    </div>
+
+    <div id="reader"></div>
+
+    <div id="status" class="status">
+      Tekan tombol "Mulai Kamera".
+    </div>
+
+    <button
+      id="btnStart"
+      class="btn-start"
+      onclick="mulaiScanner()">
+      📷 Mulai Kamera
+    </button>
+
+    <button
+      id="btnStop"
+      class="btn-stop"
+      onclick="berhentiScanner()"
+      style="display:none;">
+      ⛔ Berhenti Kamera
+    </button>
+
+    <div id="hasil" class="result" style="display:none;">
+      QR berhasil dibaca
+
+      <strong id="hasilQR"></strong>
+    </div>
+
+    <div class="small">
+      Pastikan izin kamera browser sudah diberikan.
+      <br>
+      Arahkan kamera ke QR Code peserta PKL.
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+  let scanner = null;
+  let sedangScan = false;
+  let sudahScan = false;
+
+  // =====================================================
+  // AMBIL ORIGIN APPS SCRIPT
+  // =====================================================
+
+  const params = new URLSearchParams(window.location.search);
+
+  const origin = params.get('origin');
+
+  console.log('Origin Apps Script:', origin);
+
+
+  // =====================================================
+  // UPDATE STATUS
+  // =====================================================
+
+  function status(teks, tipe = '') {
+
+    const el = document.getElementById('status');
+
+    el.textContent = teks;
+
+    el.className = 'status';
+
+    if (tipe) {
+      el.classList.add(tipe);
+    }
+  }
+
+
+  // =====================================================
+  // MULAI SCANNER
+  // =====================================================
+
+  async function mulaiScanner() {
+
+    if (sedangScan) {
+      return;
+    }
+
+    sudahScan = false;
+
+    status(
+      'Meminta izin kamera...',
+      'warning'
+    );
+
+    try {
+
+      scanner = new Html5Qrcode("reader");
+
+      const cameras =
+        await Html5Qrcode.getCameras();
+
+      if (!cameras || cameras.length === 0) {
+
+        status(
+          'Kamera tidak ditemukan.',
+          'error'
+        );
+
+        return;
+      }
+
+      console.log('Kamera:', cameras);
+
+      // =================================================
+      // PILIH KAMERA BELAKANG
+      // =================================================
+
+      let cameraId = cameras[0].id;
+
+      for (const camera of cameras) {
+
+        const label =
+          (camera.label || '').toLowerCase();
+
+        if (
+          label.includes('back') ||
+          label.includes('rear') ||
+          label.includes('environment')
+        ) {
+
+          cameraId = camera.id;
+
+          break;
+        }
+      }
+
+
+      // =================================================
+      // JALANKAN SCANNER
+      // =================================================
+
+      await scanner.start(
+
+        cameraId,
+
+        {
+          fps: 10,
+
+          qrbox: {
+            width: 250,
+            height: 250
+          },
+
+          aspectRatio: 1.0
+
+        },
+
+        function(decodedText) {
+
+          if (sudahScan) {
+            return;
+          }
+
+          sudahScan = true;
+
+          berhasilScan(decodedText);
+
+        },
+
+        function(errorMessage) {
+
+          // Error scan biasa diabaikan
+        }
+
+      );
+
+
+      sedangScan = true;
+
+      document.getElementById(
+        'btnStart'
+      ).style.display = 'none';
+
+      document.getElementById(
+        'btnStop'
+      ).style.display = 'block';
+
+      status(
+        'Kamera aktif. Arahkan ke QR Code.',
+        'success'
+      );
+
+    }
+
+    catch (error) {
+
+      console.error(error);
+
+      status(
+        'Kamera tidak dapat digunakan: ' +
+        error,
+        'error'
+      );
+
+      scanner = null;
+
+    }
+
+  }
+
+
+  // =====================================================
+  // BERHENTI SCANNER
+  // =====================================================
+
+  async function berhentiScanner() {
+
+    try {
+
+      if (scanner && sedangScan) {
+
+        await scanner.stop();
+
+        scanner.clear();
+
+      }
+
+    }
+
+    catch (error) {
+
+      console.error(error);
+
+    }
+
+    scanner = null;
+
+    sedangScan = false;
+
+    document.getElementById(
+      'btnStart'
+    ).style.display = 'block';
+
+    document.getElementById(
+      'btnStop'
+    ).style.display = 'none';
+
+    status(
+      'Kamera dihentikan.'
+    );
+
+  }
+
+
+  // =====================================================
+  // QR BERHASIL DIBACA
+  // =====================================================
+
+  function berhasilScan(decodedText) {
+
+    console.log(
+      'QR TERBACA:',
+      decodedText
+    );
+
+    document.getElementById(
+      'hasil'
+    ).style.display = 'block';
+
+    document.getElementById(
+      'hasilQR'
+    ).textContent = decodedText;
+
+    status(
+      'QR berhasil dibaca. Mengirim data...',
+      'success'
+    );
+
+
+    // ===================================================
+    // KIRIM KE APPS SCRIPT
+    // ===================================================
+
+    if (
+      window.opener &&
+      !window.opener.closed
+    ) {
+
+      try {
+
+        window.opener.postMessage(
+
+          {
+            type: 'PKL_QR_SCAN',
+            qr: decodedText
+          },
+
+          origin || '*'
+
+        );
+
+        console.log(
+          'Data dikirim ke Apps Script:',
+          decodedText
+        );
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        status(
+          'Gagal mengirim hasil scan.',
+          'error'
+        );
+
+        return;
+      }
+
+    }
+
+    else {
+
+      status(
+        'Halaman utama aplikasi tidak ditemukan.',
+        'error'
+      );
+
+      return;
+
+    }
+
+
+    // ===================================================
+    // STOP KAMERA
+    // ===================================================
+
+    setTimeout(
+      async function() {
+
+        await berhentiScanner();
+
+        status(
+          'Scan berhasil. Kembali ke halaman Presensi.',
+          'success'
+        );
+
+      },
+      700
+    );
+
+  }
+
+</script>
+
+</body>
+</html>
